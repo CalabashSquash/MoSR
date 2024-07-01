@@ -1,23 +1,38 @@
-use std::io::{self, Write};
+use std::{fmt::{self, Debug}, io::{self, Write}};
 
 use rand::Rng;
 
+enum Note {
+    Queued(QueuedNote),
+    Active(ActiveNote),
+    Suspended(SuspendedNote),
+    Paused(PausedNote),
+}
+
+// implement Into/From for switching between notes
+
+struct QueuedNote {}
+
 #[derive(Debug)]
-struct Exercise {
+struct ActiveNote {
     id: u64,
     name: String,
     current_interval_minutes: u64,
-    kind: ExerciseRest,
+    kind: IntervalType,
 }
 
+struct SuspendedNote {}
+
+struct PausedNote {}
+
 #[derive(Debug)]
-enum ExerciseRest {
+enum IntervalType {
     NoRest,
     MultiDayRest,
     SingleDayRest,
 }
 
-impl Exercise {
+impl ActiveNote {
     fn next_interval(&self) -> u64 {
         let interval_float: f64 = self.current_interval_minutes as f64;
         (interval_float * 1.5).ceil() as u64
@@ -29,11 +44,9 @@ fn main() {
     let name = new_exercise_name_cli();
     println!("Hello, {name}er!");
     let rest = new_exercise_rest_cli();
-    println!("Hello, {name}er!");
     let id = new_exercise_id();
-    println!("ID: {id}");
 
-    let new_exercise = Exercise {
+    let new_exercise = ActiveNote {
         id,
         name,
         current_interval_minutes: 1,
@@ -59,12 +72,15 @@ fn new_exercise_name_cli() -> String {
     let name1 = name.trim_end();
 
     String::from(name1)
+
 }
 
-fn new_exercise_rest_cli() -> ExerciseRest {
+fn new_exercise_rest_cli() -> IntervalType {
     let mut name = String::new();
     // io::stdin().read_line(name).inspect(| x | println!({x})).unwrap()
-    print!("exercise minimum rest required (Acceptable values: none, single, multi) (default: none): ");
+    print!(
+        "exercise minimum rest required (Acceptable values: none, single, multi) (default: none): "
+    );
     io::stdout().flush().expect("Error flushing stdout");
 
     io::stdin()
@@ -74,9 +90,9 @@ fn new_exercise_rest_cli() -> ExerciseRest {
     let name1 = name.trim_end();
 
     match name1 {
-        "none" => ExerciseRest::NoRest,
-        "single" => ExerciseRest::SingleDayRest,
-        "multi" => ExerciseRest::MultiDayRest,
-        _ => panic!("Invalid rest type")
+        "none" => IntervalType::NoRest,
+        "single" => IntervalType::SingleDayRest,
+        "multi" => IntervalType::MultiDayRest,
+        _ => panic!("Invalid rest type"),
     }
 }
