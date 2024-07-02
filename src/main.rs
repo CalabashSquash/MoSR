@@ -1,29 +1,50 @@
-use std::{fmt::{self, Debug}, io::{self, Write}};
+use std::{
+    error::Error,
+    fmt::Debug,
+    io::{self, Error as IoError, ErrorKind as IoErrorKind, Write},
+    num::ParseIntError,
+};
 
 use rand::Rng;
 
-enum Note {
-    Queued(QueuedNote),
-    Active(ActiveNote),
-    Suspended(SuspendedNote),
-    Paused(PausedNote),
-}
+// TODO currently comments say csv should include last viewed but that does not accurately reflect code
 
-// implement Into/From for switching between notes
-
-struct QueuedNote {}
+const NOTE_STRUCT_FIELDS: u8 = 5;
 
 #[derive(Debug)]
-struct ActiveNote {
+struct Note {
     id: u64,
     name: String,
     current_interval_minutes: u64,
     kind: IntervalType,
+    state: NoteState,
+    // Also need a last_answered, to use in combination with current time and current_interval_minutes to see if it's ready for review
 }
 
-struct SuspendedNote {}
+#[derive(Debug)]
+enum NoteState {
+    Uninitialized,
+    Queued,
+    Active,
+    Suspended,
+    Paused,
+}
 
-struct PausedNote {}
+struct InvalidNoteState;
+
+impl NoteState {
+    // TODO this can probably be part of the From trait thingo?
+    fn from(note_state: &str) -> Result<NoteState, InvalidNoteState> {
+        match note_state.to_lowercase().as_str() {
+            "uninitialized" => Ok(NoteState::Uninitialized),
+            "queued" => Ok(NoteState::Queued),
+            "active" => Ok(NoteState::Active),
+            "suspended" => Ok(NoteState::Suspended),
+            "paused" => Ok(NoteState::Paused),
+            _ => Err(InvalidNoteState)
+        }
+    }
+}
 
 #[derive(Debug)]
 enum IntervalType {
@@ -32,7 +53,115 @@ enum IntervalType {
     SingleDayRest,
 }
 
-impl ActiveNote {
+impl IntervalType {
+    // TODO this can probably be part of the From trait thingo?
+    fn from(interval_type: &str) -> IntervalType {
+        match interval_type {
+            "none" => IntervalType::NoRest,
+            "single" => IntervalType::SingleDayRest,
+            "multi" => IntervalType::MultiDayRest,
+            _ => panic!("Invalid rest type"),
+        }
+    }
+}
+
+enum ParseError {
+    ParseIntError(ParseIntError),
+    IoError(IoError),
+    InvalidNoteState,
+}
+
+fn not_enough_elements_error() -> Result<Note, ParseError> {
+    Err(ParseError::IoError(IoError::new(
+        IoErrorKind::InvalidData,
+        "No first CSV value",
+    )))
+}
+
+// TODO idea: implement (maybe `From`?) trait for each type in the Note struct in order to convert from
+// String.
+
+impl Note {
+    fn empty() -> Note {
+        Note {
+            id: 0,
+            name: "".to_string(),
+            current_interval_minutes: 0,
+            kind: IntervalType::NoRest,
+            state: NoteState::Uninitialized,
+        }
+    }
+
+    fn from_csv_line(line: &str) -> Result<Note, ParseError> {
+        let fields = line.split(',');
+
+        let fields: Vec<&str> = fields.collect();
+
+        // Could also do: assert_eq!(fields.len(), NOTE_STRUCT_FIELDS.into());
+        // but I want to practice error handling.
+        if fields.len() != NOTE_STRUCT_FIELDS.into() {
+            return Err(
+                ParseError::IoError(
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput,
+                    "Invalid line. Please format each line with the following format:\nid,name,current_interval_minutes,kind,last_answered")
+                )
+            );
+        }
+
+
+        let mut fields_iter = line.split(',').into_iter();
+
+        let mut note = Note::empty();
+        note.id = match fields_iter.next() {
+            Some(id) => match id.parse::<u64>() {
+                Ok(id_parsed) => id_parsed,
+                Err(err) => {
+                    return Err(ParseError::ParseIntError(err))
+                }
+            }
+            None => return not_enough_elements_error()
+        };
+
+        note.name = match fields_iter.next() {
+            Some(name) => name.to_string(),
+            None => {
+                return not_enough_elements_error()
+            }
+        };
+
+        note.current_interval_minutes = match fields_iter.next() {
+            Some(current_interval_minutes) => match current_interval_minutes.parse::<u64>() {
+                Ok(interval_parsed) => interval_parsed,
+                Err(err) => {
+                    return Err(ParseError::ParseIntError(err))
+                }
+            },
+            None => return not_enough_elements_error(),
+        };
+
+        note.kind = match fields_iter.next() {
+            Some(interval_type) => IntervalType::from(interval_type),
+            None => return not_enough_elements_error(),
+        };
+
+        note.state = match fields_iter.next() {
+            Some(state) => match NoteState::from(state) {
+                Ok(state) => match state {
+                    NoteState::Uninitialized => return Err(ParseError::InvalidNoteState),
+                    any_other_state => any_other_state
+                },
+                Err(_) => return Err(ParseError::InvalidNoteState)
+            },
+            None => return not_enough_elements_error()
+        };
+
+        println!("{:#?}", note);
+
+        // Note this has to be updated each time we add a new field to Note
+
+        Ok(note)
+    }
+
     fn next_interval(&self) -> u64 {
         let interval_float: f64 = self.current_interval_minutes as f64;
         (interval_float * 1.5).ceil() as u64
@@ -40,20 +169,46 @@ impl ActiveNote {
 }
 
 fn main() {
-    println!("Hello, world!");
-    let name = new_exercise_name_cli();
-    println!("Hello, {name}er!");
-    let rest = new_exercise_rest_cli();
-    let id = new_exercise_id();
+    // println!("Hello, world!");
+    // let name = new_exercise_name_cli();
+    // println!("Hello, {name}er!");
+    // let rest = new_exercise_interval_type_cli();
+    // let id = new_exercise_id();
 
-    let new_exercise = ActiveNote {
-        id,
-        name,
-        current_interval_minutes: 1,
-        kind: rest
+    // let new_exercise = ActiveNote {
+    //     id,
+    //     name,
+    //     current_interval_minutes: 1,
+    //     kind: rest
+    // };
+
+    // println!("{:#?}", new_exercise)
+
+    load_notes("hello.txt");
+}
+
+// Loads notes from a file of format:
+// id,name,current_interval_minutes,kind,last_answered
+// repeated over multiple lines.
+// This is temporary to help me practice, until we start using DBs instead.
+fn load_notes(filename: &str) -> Result<Vec<Note>, std::io::Error> {
+    let file = match std::fs::read_to_string(filename) {
+        Ok(f) => f,
+        Err(e) => match e.kind() {
+            io::ErrorKind::NotFound => panic!("File not found!"),
+            _ => panic!("Unknown Error"),
+        },
     };
 
-    println!("{:#?}", new_exercise)
+    let mut notes: Vec<Note> = vec![];
+    let lines = file.lines();
+    for line in lines.into_iter() {
+        println!("{}", line);
+    }
+
+    // println!("{}", file);
+
+    return Err(std::io::Error::new(io::ErrorKind::Other, "Not Implemented"));
 }
 
 fn new_exercise_id() -> u64 {
@@ -72,27 +227,19 @@ fn new_exercise_name_cli() -> String {
     let name1 = name.trim_end();
 
     String::from(name1)
-
 }
 
-fn new_exercise_rest_cli() -> IntervalType {
-    let mut name = String::new();
-    // io::stdin().read_line(name).inspect(| x | println!({x})).unwrap()
+fn new_exercise_interval_type_cli() -> IntervalType {
+    let mut interval_type = String::new();
     print!(
         "exercise minimum rest required (Acceptable values: none, single, multi) (default: none): "
     );
     io::stdout().flush().expect("Error flushing stdout");
 
     io::stdin()
-        .read_line(&mut name)
+        .read_line(&mut interval_type)
         .expect("Failed to read line");
-    // let (name1, _) = name.split_at(name.len() - 1);
-    let name1 = name.trim_end();
+    let type1 = interval_type.trim_end();
 
-    match name1 {
-        "none" => IntervalType::NoRest,
-        "single" => IntervalType::SingleDayRest,
-        "multi" => IntervalType::MultiDayRest,
-        _ => panic!("Invalid rest type"),
-    }
+    IntervalType::from(type1)
 }
