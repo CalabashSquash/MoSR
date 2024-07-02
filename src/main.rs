@@ -34,13 +34,13 @@ struct InvalidNoteState;
 
 impl NoteState {
     // TODO this can probably be part of the From trait thingo?
-    fn from(note_state: &str) -> Result<NoteState, InvalidNoteState> {
+    fn from(note_state: &str) -> Result<Self, InvalidNoteState> {
         match note_state.to_lowercase().as_str() {
-            "uninitialized" => Ok(NoteState::Uninitialized),
-            "queued" => Ok(NoteState::Queued),
-            "active" => Ok(NoteState::Active),
-            "suspended" => Ok(NoteState::Suspended),
-            "paused" => Ok(NoteState::Paused),
+            "uninitialized" => Ok(Self::Uninitialized),
+            "queued" => Ok(Self::Queued),
+            "active" => Ok(Self::Active),
+            "suspended" => Ok(Self::Suspended),
+            "paused" => Ok(Self::Paused),
             _ => Err(InvalidNoteState)
         }
     }
@@ -55,7 +55,7 @@ enum IntervalType {
 
 impl IntervalType {
     // TODO this can probably be part of the From trait thingo?
-    fn from(interval_type: &str) -> IntervalType {
+    fn from(interval_type: &str) -> Self {
         match interval_type {
             "none" => IntervalType::NoRest,
             "single" => IntervalType::SingleDayRest,
@@ -82,7 +82,7 @@ fn not_enough_elements_error() -> Result<Note, ParseError> {
 // String.
 
 impl Note {
-    fn empty() -> Note {
+    fn empty() -> Self {
         Note {
             id: 0,
             name: "".to_string(),
@@ -92,7 +92,7 @@ impl Note {
         }
     }
 
-    fn from_csv_line(line: &str) -> Result<Note, ParseError> {
+    fn from_csv_line(line: &str) -> Result<Self, ParseError> {
         let fields = line.split(',');
 
         let fields: Vec<&str> = fields.collect();
