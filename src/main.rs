@@ -74,7 +74,14 @@ enum ParseError {
 fn not_enough_elements_error() -> Result<Note, ParseError> {
     Err(ParseError::IoError(IoError::new(
         IoErrorKind::InvalidData,
-        "No first CSV value",
+        "Not enough CSV columns",
+    )))
+}
+
+fn too_many_elements_error() -> Result<Note, ParseError> {
+    Err(ParseError::IoError(IoError::new(
+        IoErrorKind::InvalidData,
+        "Too many CSV columns",
     )))
 }
 
@@ -93,22 +100,6 @@ impl Note {
     }
 
     fn from_csv_line(line: &str) -> Result<Self, ParseError> {
-        let fields = line.split(',');
-
-        let fields: Vec<&str> = fields.collect();
-
-        // Could also do: assert_eq!(fields.len(), NOTE_STRUCT_FIELDS.into());
-        // but I want to practice error handling.
-        if fields.len() != NOTE_STRUCT_FIELDS.into() {
-            return Err(
-                ParseError::IoError(
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput,
-                    "Invalid line. Please format each line with the following format:\nid,name,current_interval_minutes,kind,last_answered")
-                )
-            );
-        }
-
-
         let mut fields_iter = line.split(',').into_iter();
 
         let mut note = Note::empty();
@@ -156,6 +147,11 @@ impl Note {
         };
 
         println!("{:#?}", note);
+
+        match fields_iter.next() {
+            None => {},
+            _ => {return too_many_elements_error();}
+        };
 
         // Note this has to be updated each time we add a new field to Note
 
