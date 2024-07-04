@@ -30,6 +30,7 @@ enum NoteState {
     Paused,
 }
 
+#[derive(Debug)]
 struct InvalidNoteState;
 
 impl NoteState {
@@ -41,7 +42,7 @@ impl NoteState {
             "active" => Ok(Self::Active),
             "suspended" => Ok(Self::Suspended),
             "paused" => Ok(Self::Paused),
-            _ => Err(InvalidNoteState)
+            _ => Err(InvalidNoteState),
         }
     }
 }
@@ -65,6 +66,7 @@ impl IntervalType {
     }
 }
 
+#[derive(Debug)]
 enum ParseError {
     ParseIntError(ParseIntError),
     IoError(IoError),
@@ -99,33 +101,28 @@ impl Note {
         }
     }
 
+    // TODO just google how this should be done.
     fn from_csv_line(line: &str) -> Result<Self, ParseError> {
         let mut fields_iter = line.split(',').into_iter();
-
         let mut note = Note::empty();
+
         note.id = match fields_iter.next() {
             Some(id) => match id.parse::<u64>() {
                 Ok(id_parsed) => id_parsed,
-                Err(err) => {
-                    return Err(ParseError::ParseIntError(err))
-                }
-            }
-            None => return not_enough_elements_error()
+                Err(err) => return Err(ParseError::ParseIntError(err)),
+            },
+            None => return not_enough_elements_error(),
         };
 
         note.name = match fields_iter.next() {
             Some(name) => name.to_string(),
-            None => {
-                return not_enough_elements_error()
-            }
+            None => return not_enough_elements_error(),
         };
 
         note.current_interval_minutes = match fields_iter.next() {
             Some(current_interval_minutes) => match current_interval_minutes.parse::<u64>() {
                 Ok(interval_parsed) => interval_parsed,
-                Err(err) => {
-                    return Err(ParseError::ParseIntError(err))
-                }
+                Err(err) => return Err(ParseError::ParseIntError(err)),
             },
             None => return not_enough_elements_error(),
         };
@@ -139,18 +136,20 @@ impl Note {
             Some(state) => match NoteState::from(state) {
                 Ok(state) => match state {
                     NoteState::Uninitialized => return Err(ParseError::InvalidNoteState),
-                    any_other_state => any_other_state
+                    any_other_state => any_other_state,
                 },
-                Err(_) => return Err(ParseError::InvalidNoteState)
+                Err(_) => return Err(ParseError::InvalidNoteState),
             },
-            None => return not_enough_elements_error()
+            None => return not_enough_elements_error(),
         };
 
         println!("{:#?}", note);
 
         match fields_iter.next() {
-            None => {},
-            _ => {return too_many_elements_error();}
+            None => {}
+            _ => {
+                return too_many_elements_error();
+            }
         };
 
         // Note this has to be updated each time we add a new field to Note
@@ -163,6 +162,7 @@ impl Note {
         (interval_float * 1.5).ceil() as u64
     }
 }
+
 
 fn main() {
     // println!("Hello, world!");
@@ -180,14 +180,33 @@ fn main() {
 
     // println!("{:#?}", new_exercise)
 
-    load_notes("hello.txt");
+    let notes = match load_notes("hello_broken.txt") {
+        Ok(x) => {
+            println!("Done reading");
+            x
+        }
+        Err(ParseError::InvalidNoteState) => {
+            println!("bonk");
+            return ();
+        },
+        Err(ParseError::IoError(err)) => {
+            println!("{}", err);
+            return ();
+        }
+        Err(ParseError::ParseIntError(err)) => {
+            println!("ParseIntError: {} (aka double bonk)", err);
+            return ();
+        },
+    };
+
+    // Next do something with the notes
 }
 
 // Loads notes from a file of format:
-// id,name,current_interval_minutes,kind,last_answered
+// id,name,current_interval_minutes,kind,state // ,last_answered
 // repeated over multiple lines.
 // This is temporary to help me practice, until we start using DBs instead.
-fn load_notes(filename: &str) -> Result<Vec<Note>, std::io::Error> {
+fn load_notes(filename: &str) -> Result<Vec<Note>, ParseError> {
     let file = match std::fs::read_to_string(filename) {
         Ok(f) => f,
         Err(e) => match e.kind() {
@@ -197,14 +216,18 @@ fn load_notes(filename: &str) -> Result<Vec<Note>, std::io::Error> {
     };
 
     let mut notes: Vec<Note> = vec![];
+
     let lines = file.lines();
     for line in lines.into_iter() {
         println!("{}", line);
+        let line_result = Note::from_csv_line(line)?;
+            // .expect(format!("Parsing line {} in {} failed with error: ", index, filename).as_str());
+        println!("{:#?}", line_result);
     }
 
     // println!("{}", file);
 
-    return Err(std::io::Error::new(io::ErrorKind::Other, "Not Implemented"));
+    unimplemented!();
 }
 
 fn new_exercise_id() -> u64 {
