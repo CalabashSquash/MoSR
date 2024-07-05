@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     fmt::Debug,
     io::{self, Error as IoError, ErrorKind as IoErrorKind, Write},
     num::ParseIntError,
@@ -8,8 +7,6 @@ use std::{
 use rand::Rng;
 
 // TODO currently comments say csv should include last viewed but that does not accurately reflect code
-
-const NOTE_STRUCT_FIELDS: u8 = 5;
 
 #[derive(Debug)]
 struct Note {
@@ -66,10 +63,13 @@ impl IntervalType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 enum ParseError {
-    ParseIntError(ParseIntError),
-    IoError(IoError),
+    #[error("grandparent error {0:?}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("grandparent error {0:?}")]
+    IoError(#[from] IoError),
+    #[error("Invalid note state given")]
     InvalidNoteState,
 }
 
@@ -107,10 +107,7 @@ impl Note {
         let mut note = Note::empty();
 
         note.id = match fields_iter.next() {
-            Some(id) => match id.parse::<u64>() {
-                Ok(id_parsed) => id_parsed,
-                Err(err) => return Err(ParseError::ParseIntError(err)),
-            },
+            Some(id) => id.parse::<u64>()?,
             None => return not_enough_elements_error(),
         };
 
@@ -143,8 +140,6 @@ impl Note {
             None => return not_enough_elements_error(),
         };
 
-        println!("{:#?}", note);
-
         match fields_iter.next() {
             None => {}
             _ => {
@@ -163,24 +158,8 @@ impl Note {
     }
 }
 
-
 fn main() {
-    // println!("Hello, world!");
-    // let name = new_exercise_name_cli();
-    // println!("Hello, {name}er!");
-    // let rest = new_exercise_interval_type_cli();
-    // let id = new_exercise_id();
-
-    // let new_exercise = ActiveNote {
-    //     id,
-    //     name,
-    //     current_interval_minutes: 1,
-    //     kind: rest
-    // };
-
-    // println!("{:#?}", new_exercise)
-
-    let notes = match load_notes("hello_broken.txt") {
+    let _ = match load_notes("hello.txt") {
         Ok(x) => {
             println!("Done reading");
             x
@@ -188,7 +167,7 @@ fn main() {
         Err(ParseError::InvalidNoteState) => {
             println!("bonk");
             return ();
-        },
+        }
         Err(ParseError::IoError(err)) => {
             println!("{}", err);
             return ();
@@ -196,7 +175,7 @@ fn main() {
         Err(ParseError::ParseIntError(err)) => {
             println!("ParseIntError: {} (aka double bonk)", err);
             return ();
-        },
+        }
     };
 
     // Next do something with the notes
@@ -219,15 +198,11 @@ fn load_notes(filename: &str) -> Result<Vec<Note>, ParseError> {
 
     let lines = file.lines();
     for line in lines.into_iter() {
-        println!("{}", line);
         let line_result = Note::from_csv_line(line)?;
-            // .expect(format!("Parsing line {} in {} failed with error: ", index, filename).as_str());
-        println!("{:#?}", line_result);
+        notes.push(line_result);
     }
 
-    // println!("{}", file);
-
-    unimplemented!();
+    Ok(notes)
 }
 
 fn new_exercise_id() -> u64 {
